@@ -13,8 +13,12 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.database import get_db
+from app.middleware.auth import CurrentUser, get_current_active_user
+from app.models.user import Organization, User
 
 logger = structlog.get_logger()
 
@@ -39,7 +43,7 @@ class UserProfile(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     """Update user profile request."""
-    name: Optional[str] = Field(default=None, max_length=255)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     # Add other updatable fields
 
 
@@ -64,31 +68,42 @@ class CreateOrganizationRequest(BaseModel):
 # =============================================================================
 
 @router.get("/me", response_model=UserProfile)
-async def get_current_user(request: Request):
+async def get_my_profile(
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Get current user's profile.
     """
-    # TODO: Get current user from token and database
+    user = await db.get(User, current_user.id)
+    organization = await db.get(Organization, user.org_id)
 
     return UserProfile(
-        id="00000000-0000-0000-0000-000000000002",
-        email="user@example.com",
-        name="Placeholder User",
-        role="admin",
-        organization_id="00000000-0000-0000-0000-000000000001",
-        organization_name="My Organization",
-        mfa_enabled=False,
-        created_at="2026-01-29T00:00:00Z",
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        role=user.role,
+        organization_id=user.org_id,
+        organization_name=organization.name,
+        mfa_enabled=user.mfa_enabled,
+        created_at=user.created_at.isoformat(),
     )
 
 
 @router.patch("/me")
-async def update_current_user(request: Request, data: UpdateProfileRequest):
+async def update_current_user(
+    data: UpdateProfileRequest,
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Update current user's profile.
     """
-    # TODO: Get current user from token
-    # TODO: Update user in database
+    user = await db.get(User, current_user.id)
+
+    if data.name is not None:
+        user.name = data.name.strip()
+
     # TODO: Log profile update in audit log
 
     return {"message": "Profile updated successfully"}

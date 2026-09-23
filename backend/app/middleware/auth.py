@@ -15,6 +15,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import verify_token
+from app.models.user import User
 
 logger = structlog.get_logger()
 
@@ -45,40 +47,38 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
     """
-    Get the current authenticated user from the JWT token.
+    Get the current authenticated user from the JWT access token.
 
-    This is a placeholder implementation for development.
-    In production, this should validate the JWT token and fetch the user.
+    Rolü ve organizasyonu token'daki iddialardan değil veritabanından alır;
+    böylece rol değişikliği veya hesabın kapatılması hemen etkili olur.
     """
-    # TODO: Implement proper JWT validation
-    # For now, return a placeholder user for development
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     if credentials is None:
-        # Allow unauthenticated access in development with placeholder
-        return CurrentUser(
-            id="00000000-0000-0000-0000-000000000002",
-            email="dev@example.com",
-            org_id="00000000-0000-0000-0000-000000000001",
-            role="admin",
-            is_active=True,
+        raise unauthorized
+
+    token_data = verify_token(credentials.credentials, token_type="access")
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # In production, validate token and fetch user
-    # token = credentials.credentials
-    # try:
-    #     payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
-    #     user_id = payload.get("sub")
-    #     # Fetch user from database
-    # except jwt.ExpiredSignatureError:
-    #     raise HTTPException(status_code=401, detail="Token expired")
-    # except jwt.JWTError:
-    #     raise HTTPException(status_code=401, detail="Invalid token")
+    user = await db.get(User, token_data.user_id)
+    if user is None or user.deleted_at is not None or not user.is_active:
+        raise unauthorized
 
     return CurrentUser(
-        id="00000000-0000-0000-0000-000000000002",
-        email="dev@example.com",
-        org_id="00000000-0000-0000-0000-000000000001",
-        role="admin",
-        is_active=True,
+        id=user.id,
+        email=user.email,
+        org_id=user.org_id,
+        role=user.role,
+        is_active=user.is_active,
     )
 
 

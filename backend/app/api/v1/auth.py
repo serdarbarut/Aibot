@@ -18,6 +18,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.security import (
@@ -25,13 +26,22 @@ from app.core.security import (
     generate_recovery_codes,
     generate_totp_qr_code,
     generate_totp_secret,
-    hash_password,
     hash_recovery_code,
-    verify_password,
     verify_totp,
     verify_token,
 )
+from app.core.database import get_db
 from app.middleware.security import get_client_ip, limiter
+from app.services.auth_service import (
+    AccountDisabledError,
+    AccountLockedError,
+    EmailAlreadyRegisteredError,
+    EmailNotVerifiedError,
+    InvalidCredentialsError,
+    MFARequiredError,
+    authenticate_user,
+    register_user,
+)
 
 logger = structlog.get_logger()
 
@@ -109,76 +119,93 @@ class PasswordResetConfirm(BaseModel):
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(settings.rate_limit_auth)
-async def register(request: Request, data: RegisterRequest):
+async def register(
+    request: Request,
+    data: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Register a new user account.
 
-    - Creates user with hashed password
-    - Creates default organization if name provided
-    - Sends verification email
+    - Creates a new organization with the user as its admin
+    - Hashes the password with Argon2id
+    - In development the account is auto-verified; elsewhere it starts unverified
     """
-    # TODO: Implement actual registration with database
-    # This is a placeholder showing the structure
+    try:
+        user = await register_user(
+            db,
+            email=data.email,
+            password=data.password,
+            name=data.name,
+            organization_name=data.organization_name,
+        )
+    except EmailAlreadyRegisteredError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
 
-    logger.info(
-        "user_registration_attempt",
-        email=data.email,
-        client_ip=get_client_ip(request),
+    message = (
+        "Registration successful. You can now log in."
+        if user.email_verified
+        else "Registration successful. Please check your email to verify your account."
     )
-
-    # Hash password with Argon2id
-    password_hash = hash_password(data.password)
-
-    # TODO: Check if email already exists
-    # TODO: Create user in database
-    # TODO: Create organization if provided
-    # TODO: Send verification email
-
-    return RegisterResponse(
-        message="Registration successful. Please check your email to verify your account.",
-        user_id="00000000-0000-0000-0000-000000000002",
-    )
+    return RegisterResponse(message=message, user_id=user.id)
 
 
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit(settings.rate_limit_auth)
-async def login(request: Request, data: LoginRequest):
+async def login(
+    request: Request,
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Authenticate user and return tokens.
 
-    - Verifies email and password
-    - Checks if MFA is required
+    - Verifies email and password (locks the account after repeated failures)
+    - Rejects disabled, unverified and MFA-enabled accounts
     - Returns JWT tokens on success
     """
     client_ip = get_client_ip(request)
 
-    logger.info(
-        "login_attempt",
-        email=data.email,
-        client_ip=client_ip,
-    )
+    try:
+        user = await authenticate_user(
+            db,
+            email=data.email,
+            password=data.password,
+            client_ip=client_ip,
+        )
+    except InvalidCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    except AccountLockedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=(
+                "Account is temporarily locked due to too many failed attempts. "
+                f"Try again after {e.locked_until.strftime('%H:%M')} UTC."
+            ),
+        )
+    except AccountDisabledError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+    except EmailNotVerifiedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before logging in.",
+        )
+    except MFARequiredError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Multi-factor authentication is enabled for this account but login with MFA is not supported yet.",
+        )
 
-    # TODO: Implement actual login with database
-    # This is a placeholder showing the structure
-
-    # TODO: Fetch user from database
-    # TODO: Verify password
-    # TODO: Check if account is verified
-    # TODO: Check if MFA is required
-    # TODO: Update last_login_at
-    # TODO: Log successful login in audit log
-
-    # Placeholder response
     access_token, refresh_token = create_token_pair(
-        user_id="00000000-0000-0000-0000-000000000002",
-        org_id="00000000-0000-0000-0000-000000000001",
-        role="admin",
-    )
-
-    logger.info(
-        "login_success",
-        email=data.email,
-        client_ip=client_ip,
+        user_id=user.id,
+        org_id=user.org_id,
+        role=user.role,
     )
 
     return LoginResponse(
@@ -186,11 +213,11 @@ async def login(request: Request, data: LoginRequest):
         refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user={
-            "id": "00000000-0000-0000-0000-000000000002",
-            "email": data.email,
-            "name": "Placeholder User",
-            "role": "admin",
-            "mfa_enabled": False,
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+            "mfa_enabled": user.mfa_enabled,
         },
     )
 
