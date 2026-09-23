@@ -35,6 +35,7 @@ from app.workers.campaign_sync import (
     push_single_campaign,
     sync_single_campaign,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -280,15 +281,15 @@ async def create_campaign(
     request: Request,
     data: CampaignCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a new campaign.
 
     Creates campaign in draft status. Must be submitted for approval before launch.
     """
-    # TODO: Get current user and org from auth
-    user_id = "00000000-0000-0000-0000-000000000002"
-    org_id = "00000000-0000-0000-0000-000000000001"
+    user_id = current_user.id
+    org_id = current_user.org_id
 
     # TODO: Verify ad_account belongs to org
     # TODO: Get platform from ad_account
@@ -372,14 +373,14 @@ async def list_campaigns(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     List campaigns for the current organization.
 
     Supports filtering by status, platform, and search term.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Build query
     query = select(Campaign).where(Campaign.org_id == org_id)
@@ -416,12 +417,12 @@ async def get_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get campaign details by ID.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
     return campaign
@@ -433,15 +434,15 @@ async def update_campaign(
     campaign_id: str,
     data: CampaignUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Update a campaign.
 
     Only campaigns in draft or rejected status can be edited.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -493,15 +494,15 @@ async def delete_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Delete (archive) a campaign.
 
     Campaigns that are live on platforms will be paused before archiving.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -540,12 +541,12 @@ async def add_ad_copy(
     campaign_id: str,
     data: AdCopyCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Add an ad copy variation to a campaign.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -590,12 +591,12 @@ async def delete_ad_copy(
     campaign_id: str,
     ad_copy_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Delete an ad copy from a campaign.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -640,15 +641,15 @@ async def submit_for_approval(
     campaign_id: str,
     data: StatusChangeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Submit a campaign for manager approval.
 
     Transitions from draft to pending_review.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -710,16 +711,16 @@ async def approve_campaign(
     campaign_id: str,
     data: StatusChangeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Approve a campaign for launch.
 
     Transitions from pending_review to approved. Requires manager role.
     """
-    # TODO: Get current user's org_id and user_id
     # TODO: Verify user has manager or admin role
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -777,16 +778,16 @@ async def reject_campaign(
     campaign_id: str,
     data: StatusChangeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Reject a campaign.
 
     Transitions from pending_review to rejected. Requires manager role.
     """
-    # TODO: Get current user's org_id and user_id
     # TODO: Verify user has manager or admin role
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -847,13 +848,13 @@ async def pause_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Pause an active campaign.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -903,13 +904,13 @@ async def resume_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Resume a paused campaign.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -963,15 +964,15 @@ async def bulk_action(
     request: Request,
     data: BulkActionRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Perform bulk actions on multiple campaigns.
 
     Supported actions: pause, resume, archive
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     success_count = 0
     failures = []
@@ -1051,15 +1052,15 @@ async def duplicate_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Duplicate an existing campaign.
 
     Creates a copy in draft status.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     original = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -1143,15 +1144,15 @@ async def list_pending_approvals(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     List campaigns pending approval.
 
     For managers to review and approve/reject campaigns.
     """
-    # TODO: Get current user's org_id
     # TODO: Verify user has manager or admin role
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(Campaign).where(
         Campaign.org_id == org_id,
@@ -1187,14 +1188,14 @@ async def sync_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Manually sync a campaign's status from the platform.
 
     Fetches the current status from the ad platform and updates the local record.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -1228,14 +1229,14 @@ async def push_campaign(
     request: Request,
     campaign_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Manually push an approved campaign to the platform.
 
     Triggers immediate creation of the campaign on the ad platform.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     campaign = await get_campaign_or_404(db, campaign_id, org_id)
 
@@ -1290,6 +1291,7 @@ class CSVImportResponse(BaseModel):
 async def import_campaigns_csv(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Import campaigns from CSV data.
@@ -1311,9 +1313,8 @@ async def import_campaigns_csv(
     import csv
     import io
 
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     # Read body as text
     body = await request.body()
@@ -1479,6 +1480,7 @@ async def create_multi_platform_campaign_endpoint(
     request: Request,
     data: MultiPlatformCampaignCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a campaign across multiple ad platforms.
@@ -1487,8 +1489,8 @@ async def create_multi_platform_campaign_endpoint(
     with consistent settings and optional UTM tracking.
     """
     # TODO: Get from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     from app.services.cross_platform_service import create_multi_platform_campaign
 

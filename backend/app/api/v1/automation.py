@@ -37,6 +37,7 @@ from app.services.automation_service import (
     get_rule_templates,
     create_rule_from_template,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -253,10 +254,10 @@ async def list_rules(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """List automation rules."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     rules, total = await get_rules(
@@ -303,11 +304,11 @@ async def list_rules(
 async def create_new_rule(
     request: RuleCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Create a new automation rule."""
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     # Validate scope
     if request.scope_type == "campaign" and not request.campaign_id:
@@ -371,10 +372,10 @@ async def create_new_rule(
 async def get_single_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Get a specific rule."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -413,10 +414,10 @@ async def update_existing_rule(
     rule_id: str,
     request: RuleUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Update a rule."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -467,10 +468,10 @@ async def update_existing_rule(
 async def delete_existing_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Delete a rule."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -486,10 +487,10 @@ async def delete_existing_rule(
 async def activate_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Activate a rule."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -529,10 +530,10 @@ async def activate_rule(
 async def pause_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Pause a rule."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -573,10 +574,10 @@ async def evaluate_single_rule(
     rule_id: str,
     campaign_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Evaluate a rule without executing actions."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -611,10 +612,10 @@ async def run_rule_now(
     rule_id: str,
     campaign_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Manually run a rule (evaluate and execute if triggered)."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     rule = await get_rule(db, rule_id, org_id)
     if not rule:
@@ -658,10 +659,10 @@ async def list_executions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """List rule executions."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     executions, total = await get_rule_executions(
@@ -703,10 +704,10 @@ async def list_pending_actions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """List pending actions."""
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     actions, total = await get_pending_actions(
@@ -744,11 +745,11 @@ async def approve_action(
     action_id: str,
     request: ApprovalRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Approve a pending action."""
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     from sqlalchemy import select
     from app.models.automation import PendingAction
@@ -780,11 +781,11 @@ async def reject_action(
     action_id: str,
     request: ApprovalRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Reject a pending action."""
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     from sqlalchemy import select
     from app.models.automation import PendingAction
@@ -815,6 +816,7 @@ async def reject_action(
 async def list_templates(
     category: Optional[str] = Query(None, pattern="^(budget|performance|schedule|alerts)$"),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """List available rule templates."""
     templates = await get_rule_templates(db, category)
@@ -843,11 +845,11 @@ async def create_rule_from_template_endpoint(
     template_id: str,
     request: CreateFromTemplateRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """Create a rule from a template."""
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     rule = await create_rule_from_template(
         db=db,

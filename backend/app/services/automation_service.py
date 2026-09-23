@@ -499,10 +499,11 @@ async def execute_action(
             channels = params.get("channels", ["in_app"])
             notifications_sent = 0
 
-            if "in_app" in channels:
+            # Alıcı kuralı oluşturan kullanıcıdır; kullanıcı silinmişse (created_by_id boş) atlanır
+            if "in_app" in channels and rule.created_by_id:
                 # Create in-app notification
                 notification = Notification(
-                    user_id=rule.created_by_id or "00000000-0000-0000-0000-000000000002",
+                    user_id=rule.created_by_id,
                     org_id=rule.org_id,
                     title=f"Automation: {rule.name}",
                     message=trigger_reason,

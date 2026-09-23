@@ -27,6 +27,7 @@ from app.services import (
     generate_full_ad_copy,
     PLATFORM_LIMITS,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -115,6 +116,7 @@ class GenerationMetadata(BaseModel):
 async def get_usage_limits(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get current AI usage limits and status.
@@ -124,8 +126,9 @@ async def get_usage_limits(
     - Whether warning threshold (80%) is reached
     - Whether hard limit is reached
     """
-    # TODO: Get current user's org_id and plan_tier
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
+    # TODO: Organizasyonun plan_tier'ini kullan. Şu an ai_usage_quotas enum'u
+    # yalnızca free/pro/enterprise kabul ediyor; starter/agency için genişletilmeli.
     plan_tier = "free"
 
     status = await get_usage_status(db, org_id, plan_tier)
@@ -149,14 +152,14 @@ async def get_usage_statistics(
     year: Optional[int] = None,
     month: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get detailed AI usage statistics.
 
     Returns breakdown by generation type and model.
     """
-    # TODO: Get current user's org_id
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     stats = await get_usage_stats(db, org_id, year, month)
 
@@ -181,6 +184,7 @@ async def generate_headline_variations(
     request: Request,
     data: HeadlineGenerationRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Generate headline variations for an ad.
@@ -188,9 +192,8 @@ async def generate_headline_variations(
     Returns multiple headline options with different angles.
     All outputs are labeled as AI-assisted.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     try:
         response, result = await generate_headlines(
@@ -246,6 +249,7 @@ async def generate_description_variations(
     request: Request,
     data: DescriptionGenerationRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Generate description variations for an ad.
@@ -253,9 +257,8 @@ async def generate_description_variations(
     Returns descriptions that complement the provided headline.
     All outputs are labeled as AI-assisted.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     try:
         response, result = await generate_descriptions(
@@ -310,6 +313,7 @@ async def generate_cta_suggestions(
     request: Request,
     data: CTAGenerationRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Generate CTA (call-to-action) suggestions.
@@ -317,9 +321,8 @@ async def generate_cta_suggestions(
     Returns various CTA options appropriate for the objective.
     All outputs are labeled as AI-assisted.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     try:
         response, result = await generate_ctas(
@@ -371,6 +374,7 @@ async def generate_full_ad_copy_variations(
     request: Request,
     data: FullAdCopyGenerationRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Generate complete ad copy variations.
@@ -382,9 +386,8 @@ async def generate_full_ad_copy_variations(
     Note: This is a more expensive operation that generates complete ad copies.
     Rate limited to 5 per minute.
     """
-    # TODO: Get current user's org_id and user_id
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     try:
         response, result = await generate_full_ad_copy(

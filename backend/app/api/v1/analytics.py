@@ -14,9 +14,11 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.campaign import Campaign
 
 
 def get_date_range(start_date: Optional[date], end_date: Optional[date]) -> tuple[date, date]:
@@ -35,6 +37,7 @@ from app.services.analytics_service import (
     get_time_series_metrics,
     get_today_metrics,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -111,6 +114,7 @@ async def get_analytics_overview(
     end_date: Optional[date] = Query(default=None),
     compare_previous: bool = Query(default=False, description="Include previous period comparison"),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get aggregated overview metrics for all campaigns.
@@ -126,8 +130,7 @@ async def get_analytics_overview(
     if start_date is None:
         start_date = end_date - timedelta(days=30)
 
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Validate date range
     if end_date < start_date:
@@ -183,14 +186,14 @@ async def get_analytics_overview(
 @router.get("/today", response_model=MetricsSummaryResponse)
 async def get_today_overview(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get today's metrics (real-time tracking).
 
     Returns current day's aggregated metrics for live monitoring.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     summary = await get_today_metrics(db=db, org_id=org_id)
 
@@ -215,6 +218,7 @@ async def get_campaigns_metrics(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get metrics breakdown by campaign.
@@ -222,8 +226,7 @@ async def get_campaigns_metrics(
     Returns a list of campaigns with their metrics for the specified
     date range. Supports pagination.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Set defaults if not provided
     start_date, end_date = get_date_range(start_date, end_date)
@@ -281,12 +284,26 @@ async def get_campaign_metrics(
     end_date: Optional[date] = Query(default=None),
     compare_previous: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get detailed metrics for a specific campaign.
 
     Returns metrics with optional period-over-period comparison.
     """
+    # Başka organizasyonun kampanyası varlığını da sızdırmasın diye 404 dönülür
+    owned = await db.scalar(
+        select(Campaign.id).where(
+            Campaign.id == campaign_id,
+            Campaign.org_id == current_user.org_id,
+        )
+    )
+    if owned is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found",
+        )
+
     # Set defaults if not provided
     start_date, end_date = get_date_range(start_date, end_date)
 
@@ -341,6 +358,7 @@ async def get_analytics_time_series(
     granularity: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
     campaign_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get time series metrics data for charts.
@@ -348,8 +366,7 @@ async def get_analytics_time_series(
     Returns metrics aggregated by the specified granularity (hourly, daily, weekly).
     Can be filtered to a specific campaign or show all campaigns.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Set defaults if not provided
     start_date, end_date = get_date_range(start_date, end_date)
@@ -427,6 +444,7 @@ async def get_platform_comparison_endpoint(
     start_date: Optional[date] = Query(default=None),
     end_date: Optional[date] = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Compare performance across all connected ad platforms.
@@ -434,8 +452,7 @@ async def get_platform_comparison_endpoint(
     Returns aggregated metrics for each platform (Google Ads, Meta Ads, TikTok Ads)
     along with spend share and performance indicators.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Set defaults if not provided
     start_date, end_date = get_date_range(start_date, end_date)
@@ -484,14 +501,14 @@ async def get_unified_metrics_endpoint(
     start_date: Optional[date] = Query(default=None),
     end_date: Optional[date] = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get unified metrics aggregated across all connected platforms.
 
     Provides a single view of total advertising performance regardless of platform.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Set defaults if not provided
     start_date, end_date = get_date_range(start_date, end_date)

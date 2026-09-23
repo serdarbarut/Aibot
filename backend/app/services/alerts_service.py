@@ -471,11 +471,12 @@ async def check_and_trigger_alerts(
             alert.last_triggered_at = datetime.now(timezone.utc)
 
             # Create notifications for in-app
-            if alert.notification_channels.get("in_app"):
+            # Alıcı oluşturan kullanıcıdır; kullanıcı silinmişse (created_by_id boş) atlanır
+            if alert.notification_channels.get("in_app") and alert.created_by_id:
                 # Get org members to notify
                 # For now, create a single notification (in production, query org members)
                 notification = Notification(
-                    user_id=alert.created_by_id or "00000000-0000-0000-0000-000000000002",
+                    user_id=alert.created_by_id,
                     org_id=org_id,
                     title=f"Alert: {alert.name}",
                     message=evaluation.message,

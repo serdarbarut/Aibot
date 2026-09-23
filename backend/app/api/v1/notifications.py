@@ -24,6 +24,7 @@ from app.services.notification_service import (
     set_slack_webhook,
     test_slack_webhook,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -98,14 +99,14 @@ async def list_notifications(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get notifications for the current user.
 
     Returns a paginated list of notifications with unread count.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     offset = (page - 1) * page_size
 
@@ -142,12 +143,12 @@ async def list_notifications(
 async def mark_as_read(
     notification_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Mark a notification as read.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     notification = await mark_notification_read(db, notification_id, user_id)
 
@@ -174,12 +175,12 @@ async def mark_as_read(
 @router.post("/read-all")
 async def mark_all_as_read(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Mark all notifications as read for the current user.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     count = await mark_all_notifications_read(db, user_id)
 
@@ -194,14 +195,14 @@ async def mark_all_as_read(
 @router.get("/preferences", response_model=NotificationPreferencesResponse)
 async def get_preferences(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get notification preferences for the current user.
 
     Returns channel preferences, type-specific settings, and quiet hours.
     """
-    # TODO: Get user_id from authenticated user
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     preferences = await get_notification_preferences(db, user_id)
 
@@ -217,15 +218,15 @@ async def get_preferences(
 async def update_preferences(
     request: NotificationPreferencesUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Update notification preferences.
 
     Partial updates are supported - only provided fields will be updated.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     update_data = {}
     if request.channels is not None:
@@ -263,6 +264,7 @@ async def update_preferences(
 async def set_slack_webhook_endpoint(
     request: SlackWebhookRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Set the Slack webhook URL for the organization.
@@ -270,7 +272,7 @@ async def set_slack_webhook_endpoint(
     The webhook will be used for Slack notifications.
     """
     # TODO: Get org_id from authenticated user (admin only)
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         await set_slack_webhook(db, org_id, request.webhook_url)
@@ -285,6 +287,7 @@ async def set_slack_webhook_endpoint(
 @router.post("/slack/test")
 async def test_slack_webhook_endpoint(
     request: SlackTestRequest,
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Test a Slack webhook by sending a test message.
@@ -305,12 +308,13 @@ async def test_slack_webhook_endpoint(
 @router.delete("/slack/webhook")
 async def remove_slack_webhook(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Remove the Slack webhook for the organization.
     """
     # TODO: Get org_id from authenticated user (admin only)
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         await set_slack_webhook(db, org_id, "")

@@ -27,6 +27,7 @@ from app.services.export_service import (
     get_date_range_for_preset,
     DEFAULT_METRICS,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -96,14 +97,14 @@ async def export_overview_metrics_csv(
     include_comparison: bool = Query(default=True),
     metrics: Optional[str] = Query(default=None, description="Comma-separated list of metrics"),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Export overview metrics as CSV.
 
     Returns a CSV file with aggregated metrics for the specified date range.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Parse metrics list
     metric_list = metrics.split(",") if metrics else None
@@ -139,14 +140,14 @@ async def export_campaign_metrics_csv(
     end_date: date = Query(default_factory=date.today),
     metrics: Optional[str] = Query(default=None, description="Comma-separated list of metrics"),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Export campaign metrics as CSV.
 
     Returns a CSV file with per-campaign metrics for the specified date range.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Parse metrics list
     metric_list = metrics.split(",") if metrics else None
@@ -182,14 +183,14 @@ async def export_time_series_csv(
     granularity: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
     campaign_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Export time series metrics as CSV.
 
     Returns a CSV file with time series data for the specified date range and granularity.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         result = await export_timeseries_csv(
@@ -227,14 +228,14 @@ async def export_full_pdf_report(
     title: Optional[str] = Query(default=None),
     metrics: Optional[str] = Query(default=None, description="Comma-separated list of metrics"),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Export a full PDF report.
 
     Returns a PDF file with overview metrics, campaign breakdown, and time series summary.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Parse metrics list
     metric_list = metrics.split(",") if metrics else None
@@ -273,12 +274,12 @@ async def list_report_schedules(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     List all scheduled reports for the organization.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     # Count total
     count_query = select(func.count(ReportSchedule.id)).where(
@@ -328,13 +329,13 @@ async def list_report_schedules(
 async def create_report_schedule(
     request: ReportScheduleCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a new scheduled report.
     """
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     # Create the schedule
     schedule = ReportSchedule(
@@ -376,12 +377,12 @@ async def create_report_schedule(
 async def get_report_schedule(
     schedule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get a specific scheduled report.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(ReportSchedule).where(
         ReportSchedule.id == schedule_id,
@@ -419,12 +420,12 @@ async def update_report_schedule(
     schedule_id: str,
     request: ReportScheduleUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Update a scheduled report.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(ReportSchedule).where(
         ReportSchedule.id == schedule_id,
@@ -469,12 +470,12 @@ async def update_report_schedule(
 async def delete_report_schedule(
     schedule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Delete a scheduled report.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(ReportSchedule).where(
         ReportSchedule.id == schedule_id,
@@ -497,14 +498,14 @@ async def delete_report_schedule(
 async def run_report_now(
     schedule_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Run a scheduled report immediately.
 
     This generates and returns the report without waiting for the scheduled time.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(ReportSchedule).where(
         ReportSchedule.id == schedule_id,

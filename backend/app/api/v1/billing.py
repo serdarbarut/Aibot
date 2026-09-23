@@ -37,6 +37,7 @@ from app.services.billing_service import (
     sync_invoice_from_stripe,
     sync_payment_method,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -160,14 +161,14 @@ class UsageSummaryResponse(BaseModel):
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_current_subscription(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get the current subscription for the organization.
 
     Returns subscription details including plan, status, and billing cycle.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     subscription = await get_subscription(db, org_id)
 
@@ -264,14 +265,14 @@ async def get_available_plans():
 @router.get("/limits", response_model=PlanLimitsResponse)
 async def get_plan_limits(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get current plan limits for the organization.
 
     Returns limits based on the current subscription tier.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     subscription = await get_subscription(db, org_id)
 
@@ -290,15 +291,15 @@ async def get_plan_limits(
 async def create_checkout(
     request: CheckoutRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a Stripe Checkout session for subscription.
 
     Returns a URL to redirect the user to Stripe Checkout.
     """
-    # TODO: Get org_id and email from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
-    email = "user@example.com"
+    org_id = current_user.org_id
+    email = current_user.email
 
     try:
         checkout_url = await create_checkout_session(
@@ -324,14 +325,14 @@ async def create_checkout(
 async def create_portal_session(
     request: BillingPortalRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a Stripe Billing Portal session.
 
     Returns a URL to redirect the user to manage their subscription.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         portal_url = await create_billing_portal_session(
@@ -359,14 +360,14 @@ async def create_portal_session(
 async def cancel_current_subscription(
     request: CancelSubscriptionRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Cancel the current subscription.
 
     By default, cancels at the end of the current billing period.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         subscription = await cancel_subscription(
@@ -392,14 +393,14 @@ async def cancel_current_subscription(
 @router.post("/reactivate")
 async def reactivate_current_subscription(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Reactivate a canceled subscription.
 
     Only works if the subscription is scheduled to cancel at period end.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         subscription = await reactivate_subscription(db=db, org_id=org_id)
@@ -426,14 +427,14 @@ async def list_invoices(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get billing history (invoices).
 
     Returns a paginated list of invoices.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     invoices, total = await get_invoices(db, org_id, limit=page_size, offset=offset)
@@ -471,14 +472,14 @@ async def list_invoices(
 @router.get("/payment-methods", response_model=list[PaymentMethodResponse])
 async def list_payment_methods(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get saved payment methods.
 
     Returns all active payment methods for the organization.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     payment_methods = await get_payment_methods(db, org_id)
 
@@ -500,14 +501,14 @@ async def list_payment_methods(
 async def remove_payment_method(
     payment_method_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Remove a saved payment method.
 
     Cannot remove the default payment method.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         await delete_payment_method(db, org_id, payment_method_id)
@@ -528,14 +529,14 @@ async def remove_payment_method(
 @router.get("/usage", response_model=UsageSummaryResponse)
 async def get_usage(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get current usage summary.
 
     Returns usage counts and remaining limits for the current billing period.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     now = datetime.now(timezone.utc)
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -559,14 +560,14 @@ async def check_usage_limit(
     limit_name: str,
     current_usage: int = 0,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Check if a specific limit has been reached.
 
     Returns whether the organization is within the limit and remaining count.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     is_within, remaining = await check_limit(db, org_id, limit_name, current_usage)
 

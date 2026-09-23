@@ -13,6 +13,7 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -150,18 +151,26 @@ async def create_organization(request: Request, data: CreateOrganizationRequest)
 
 
 @router.get("/organizations/current")
-async def get_current_organization(request: Request):
+async def get_current_organization(
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Get current user's organization details.
     """
-    # TODO: Get current user and organization from database
+    organization = await db.get(Organization, current_user.org_id)
+    member_count = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.org_id == organization.id, User.deleted_at.is_(None))
+    )
 
     return {
-        "id": "00000000-0000-0000-0000-000000000001",
-        "name": "My Organization",
-        "plan_tier": "starter",
-        "member_count": 3,
-        "created_at": "2026-01-29T00:00:00Z",
+        "id": organization.id,
+        "name": organization.name,
+        "plan_tier": organization.plan_tier,
+        "member_count": member_count,
+        "created_at": organization.created_at.isoformat(),
     }
 
 

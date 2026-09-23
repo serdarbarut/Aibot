@@ -28,6 +28,7 @@ from app.services.webhook_service import (
     resend_delivery,
     test_webhook_endpoint,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -146,12 +147,12 @@ async def list_endpoints(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     List webhook endpoints for the organization.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     endpoints, total = await list_webhook_endpoints(
@@ -191,15 +192,15 @@ async def list_endpoints(
 async def create_endpoint(
     request: WebhookEndpointCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a new webhook endpoint.
 
     Returns the endpoint with its secret (secret is only shown once).
     """
-    # TODO: Get org_id and user_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     try:
         endpoint = await create_webhook_endpoint(
@@ -243,12 +244,12 @@ async def create_endpoint(
 async def get_endpoint(
     endpoint_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get a webhook endpoint by ID.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     endpoint = await get_webhook_endpoint(db, endpoint_id, org_id)
     if not endpoint:
@@ -281,12 +282,12 @@ async def update_endpoint(
     endpoint_id: str,
     request: WebhookEndpointUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Update a webhook endpoint.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         endpoint = await update_webhook_endpoint(
@@ -336,12 +337,12 @@ async def update_endpoint(
 async def delete_endpoint(
     endpoint_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Delete a webhook endpoint.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     deleted = await delete_webhook_endpoint(db, endpoint_id, org_id)
     if not deleted:
@@ -355,14 +356,14 @@ async def delete_endpoint(
 async def regenerate_secret(
     endpoint_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Regenerate the webhook secret.
 
     The new secret will be returned and must be updated in your system.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     secret = await regenerate_webhook_secret(db, endpoint_id, org_id)
     if not secret:
@@ -378,12 +379,12 @@ async def regenerate_secret(
 async def test_endpoint(
     endpoint_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Send a test event to a webhook endpoint.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     try:
         delivery = await test_webhook_endpoint(db, endpoint_id, org_id)
@@ -425,12 +426,12 @@ async def list_deliveries(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get delivery history for a webhook endpoint.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     deliveries, total = await get_delivery_history(
@@ -471,12 +472,12 @@ async def list_deliveries(
 async def get_delivery_detail(
     delivery_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get details of a specific delivery.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     delivery = await get_delivery(db, delivery_id, org_id)
     if not delivery:
@@ -507,12 +508,12 @@ async def get_delivery_detail(
 async def resend_delivery_endpoint(
     delivery_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Manually resend a delivery.
     """
-    # TODO: Get org_id from authenticated user
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     delivery = await resend_delivery(db, delivery_id, org_id)
     if not delivery:

@@ -30,6 +30,7 @@ from app.services.alerts_service import (
     mark_notification_read,
     mark_all_notifications_read,
 )
+from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
 
@@ -169,12 +170,12 @@ async def list_alerts(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     List all alerts for the organization.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     alerts, total = await get_alerts(
@@ -214,13 +215,13 @@ async def list_alerts(
 async def create_new_alert(
     request: AlertCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Create a new alert.
     """
-    # TODO: Get current user's org_id and user_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
-    user_id = "00000000-0000-0000-0000-000000000002"
+    org_id = current_user.org_id
+    user_id = current_user.id
 
     # Validate scope
     if request.scope_type == "campaign" and not request.campaign_id:
@@ -264,12 +265,12 @@ async def create_new_alert(
 async def get_alert(
     alert_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get a specific alert.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(Alert).where(Alert.id == alert_id, Alert.org_id == org_id)
     result = await db.execute(query)
@@ -303,12 +304,12 @@ async def update_existing_alert(
     alert_id: str,
     request: AlertUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Update an alert.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(Alert).where(Alert.id == alert_id, Alert.org_id == org_id)
     result = await db.execute(query)
@@ -344,12 +345,12 @@ async def update_existing_alert(
 async def delete_existing_alert(
     alert_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Delete an alert.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(Alert).where(Alert.id == alert_id, Alert.org_id == org_id)
     result = await db.execute(query)
@@ -368,12 +369,12 @@ async def delete_existing_alert(
 async def evaluate_single_alert(
     alert_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Evaluate an alert and return the result (without triggering notifications).
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     query = select(Alert).where(Alert.id == alert_id, Alert.org_id == org_id)
     result = await db.execute(query)
@@ -399,12 +400,12 @@ async def evaluate_single_alert(
 @router.post("/check-all", response_model=list[EvaluationResponse])
 async def check_all_alerts(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Check all enabled alerts and trigger notifications where needed.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     evaluations = await check_and_trigger_alerts(db, org_id)
 
@@ -431,12 +432,12 @@ async def list_alert_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get alert history.
     """
-    # TODO: Get current user's org_id from auth
-    org_id = "00000000-0000-0000-0000-000000000001"
+    org_id = current_user.org_id
 
     offset = (page - 1) * page_size
     history, total = await get_alert_history(
@@ -475,12 +476,12 @@ async def acknowledge_alert_history(
     history_id: str,
     request: AcknowledgeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Acknowledge an alert from history.
     """
-    # TODO: Get current user_id from auth
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     history = await acknowledge_alert(
         db=db,
@@ -521,12 +522,12 @@ async def list_notifications(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Get notifications for the current user.
     """
-    # TODO: Get current user_id from auth
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     offset = (page - 1) * page_size
     notifications, total = await get_notifications(
@@ -565,12 +566,12 @@ async def list_notifications(
 async def mark_notification_as_read(
     notification_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Mark a notification as read.
     """
-    # TODO: Get current user_id from auth
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     notification = await mark_notification_read(db, notification_id, user_id)
 
@@ -597,12 +598,12 @@ async def mark_notification_as_read(
 @router.post("/notifications/read-all")
 async def mark_all_as_read(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
 ):
     """
     Mark all notifications as read.
     """
-    # TODO: Get current user_id from auth
-    user_id = "00000000-0000-0000-0000-000000000002"
+    user_id = current_user.id
 
     count = await mark_all_notifications_read(db, user_id)
 
