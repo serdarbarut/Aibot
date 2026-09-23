@@ -12,6 +12,7 @@ Provides functions for:
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -694,6 +695,28 @@ async def set_slack_webhook(
     org.settings = current_settings
 
     logger.info("slack_webhook_updated", org_id=org_id)
+
+
+def validate_slack_webhook_url(url: str) -> str:
+    """
+    Slack webhook adresinin gerçekten Slack'e ait olduğunu doğrular.
+
+    Sunucu bu adrese istek attığı için serbest bırakılırsa iç ağa istek attırmak
+    (SSRF) mümkün olur. Yalnızca https://hooks.slack.com/services/... kabul edilir.
+
+    Raises:
+        ValueError: Adres beklenen biçimde değilse
+    """
+    parsed = urlparse(url.strip())
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "hooks.slack.com"
+        or parsed.port not in (None, 443)
+        or parsed.username is not None
+        or not parsed.path.startswith("/services/")
+    ):
+        raise ValueError("Slack webhook URL must look like https://hooks.slack.com/services/...")
+    return url.strip()
 
 
 async def test_slack_webhook(webhook_url: str) -> bool:

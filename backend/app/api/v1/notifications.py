@@ -7,11 +7,11 @@ Provides endpoints for:
 - Slack integration configuration
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -23,10 +23,14 @@ from app.services.notification_service import (
     update_notification_preferences,
     set_slack_webhook,
     test_slack_webhook,
+    validate_slack_webhook_url,
 )
 from app.middleware.auth import CurrentUser, get_current_active_user
 
 logger = structlog.get_logger()
+
+# Yalnızca https://hooks.slack.com/services/... adresleri kabul edilir (SSRF koruması)
+SlackWebhookUrl = Annotated[str, AfterValidator(validate_slack_webhook_url)]
 
 router = APIRouter()
 
@@ -79,13 +83,13 @@ class NotificationPreferencesUpdate(BaseModel):
 class SlackWebhookRequest(BaseModel):
     """Request to set Slack webhook."""
 
-    webhook_url: str = Field(..., description="Slack webhook URL")
+    webhook_url: SlackWebhookUrl = Field(..., description="Slack webhook URL")
 
 
 class SlackTestRequest(BaseModel):
     """Request to test Slack webhook."""
 
-    webhook_url: str = Field(..., description="Slack webhook URL to test")
+    webhook_url: SlackWebhookUrl = Field(..., description="Slack webhook URL to test")
 
 
 # =============================================================================
