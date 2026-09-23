@@ -137,7 +137,7 @@ async def initiate_connection(
     auth_url, state = OAuthClientFactory.get_authorization_url(
         platform=data.platform,
         user_id=str(current_user.id),
-        org_id=str(current_user.organization_id),
+        org_id=str(current_user.org_id),
     )
 
     logger.info(
@@ -253,7 +253,7 @@ async def select_accounts(
     org_id, token_data = _pending_tokens.pop(state)
 
     # Verify user belongs to org
-    if str(current_user.organization_id) != org_id:
+    if str(current_user.org_id) != org_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
@@ -334,7 +334,7 @@ async def list_connections(
     result = await db.execute(
         select(AdAccount)
         .where(
-            AdAccount.org_id == str(current_user.organization_id),
+            AdAccount.org_id == str(current_user.org_id),
             AdAccount.is_active == True,
         )
         .order_by(AdAccount.platform, AdAccount.platform_account_name)
@@ -373,7 +373,7 @@ async def get_connection(
     result = await db.execute(
         select(AdAccount).where(
             AdAccount.id == account_id,
-            AdAccount.org_id == str(current_user.organization_id),
+            AdAccount.org_id == str(current_user.org_id),
         )
     )
     account = result.scalar_one_or_none()
@@ -415,7 +415,7 @@ async def disconnect_account(
     result = await db.execute(
         select(AdAccount).where(
             AdAccount.id == account_id,
-            AdAccount.org_id == str(current_user.organization_id),
+            AdAccount.org_id == str(current_user.org_id),
         )
     )
     account = result.scalar_one_or_none()
@@ -457,7 +457,7 @@ async def trigger_sync(
     result = await db.execute(
         select(AdAccount).where(
             AdAccount.id == account_id,
-            AdAccount.org_id == str(current_user.organization_id),
+            AdAccount.org_id == str(current_user.org_id),
         )
     )
     account = result.scalar_one_or_none()
@@ -504,7 +504,7 @@ async def refresh_account_token_endpoint(
     result = await db.execute(
         select(AdAccount).where(
             AdAccount.id == account_id,
-            AdAccount.org_id == str(current_user.organization_id),
+            AdAccount.org_id == str(current_user.org_id),
         )
     )
     account = result.scalar_one_or_none()
@@ -566,7 +566,7 @@ async def list_platform_accounts(
     org_id, token_data = _pending_tokens[state]
 
     # Verify user belongs to org
-    if str(current_user.organization_id) != org_id:
+    if str(current_user.org_id) != org_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
