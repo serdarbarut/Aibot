@@ -11,7 +11,6 @@ Implements:
 - Session management (AUTH-006, AUTH-007)
 """
 
-from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
@@ -22,15 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.security import (
-    create_token_pair,
     generate_recovery_codes,
     generate_totp_qr_code,
     generate_totp_secret,
     hash_recovery_code,
     verify_totp,
-    verify_token,
 )
 from app.core.database import get_db
+from app.middleware.auth import CurrentUser, get_current_active_user
 from app.middleware.security import get_client_ip, limiter
 from app.services.auth_service import (
     AccountDisabledError,
@@ -41,6 +39,15 @@ from app.services.auth_service import (
     MFARequiredError,
     authenticate_user,
     register_user,
+)
+from app.services.session_service import (
+    InvalidRefreshTokenError,
+    list_active_sessions,
+    revoke_other_sessions,
+    revoke_session,
+    revoke_session_by_refresh_token,
+    rotate_session,
+    start_session,
 )
 
 logger = structlog.get_logger()
@@ -83,6 +90,11 @@ class LoginResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Token refresh request."""
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Logout request: the refresh token of the session to close."""
     refresh_token: str
 
 
@@ -202,10 +214,11 @@ async def login(
             detail="Multi-factor authentication is enabled for this account but login with MFA is not supported yet.",
         )
 
-    access_token, refresh_token = create_token_pair(
-        user_id=user.id,
-        org_id=user.org_id,
-        role=user.role,
+    access_token, refresh_token = await start_session(
+        db,
+        user,
+        client_ip=client_ip,
+        user_agent=request.headers.get("user-agent"),
     )
 
     return LoginResponse(
@@ -224,65 +237,59 @@ async def login(
 
 @router.post("/refresh", response_model=LoginResponse)
 @limiter.limit(settings.rate_limit_auth)
-async def refresh_token(request: Request, data: RefreshRequest):
+async def refresh_token(
+    request: Request,
+    data: RefreshRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Refresh access token using refresh token.
 
-    - Validates refresh token
-    - Issues new token pair
-    - Invalidates old refresh token (rotation)
+    - Validates the refresh token against its session
+    - Issues a new token pair (rotation); the previous refresh token stays
+      valid for a short grace period so concurrent tabs don't log each other out
     """
-    # Verify refresh token
-    token_data = verify_token(data.refresh_token, token_type="refresh")
-
-    if not token_data:
+    try:
+        user, access_token, new_refresh_token = await rotate_session(
+            db,
+            data.refresh_token,
+            client_ip=get_client_ip(request),
+        )
+    except InvalidRefreshTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    # TODO: Check if refresh token is in revocation list
-    # TODO: Fetch user from database
-    # TODO: Issue new token pair
-    # TODO: Add old refresh token to revocation list (rotation)
-
-    access_token, refresh_token = create_token_pair(
-        user_id=token_data.user_id,
-        org_id=token_data.org_id,
-        role=token_data.role,
-    )
-
     return LoginResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
+        refresh_token=new_refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user={
-            "id": token_data.user_id,
-            "email": "placeholder@example.com",
-            "name": "Placeholder User",
-            "role": token_data.role or "user",
-            "mfa_enabled": False,
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+            "mfa_enabled": user.mfa_enabled,
         },
     )
 
 
 @router.post("/logout")
 @limiter.limit(settings.rate_limit_auth)
-async def logout(request: Request):
+async def logout(
+    request: Request,
+    data: LogoutRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Logout user and invalidate tokens.
+    Logout: close the session the refresh token belongs to.
 
-    - Adds refresh token to revocation list
-    - Clears session data
+    Idempotent: an invalid or already-closed token still returns success.
+    Access tokens of the closed session stop working immediately.
     """
-    # TODO: Get current user from token
-    # TODO: Add refresh token to revocation list
-    # TODO: Log logout in audit log
-
-    logger.info(
-        "logout",
-        client_ip=get_client_ip(request),
-    )
+    revoked = await revoke_session_by_refresh_token(db, data.refresh_token)
+    logger.info("logout", revoked=revoked, client_ip=get_client_ip(request))
 
     return {"message": "Successfully logged out"}
 
@@ -422,47 +429,58 @@ async def disable_mfa(request: Request, data: MFAVerifyRequest):
 # =============================================================================
 
 @router.get("/sessions")
-async def list_sessions(request: Request):
+async def list_sessions(
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     List all active sessions for current user.
     """
-    # TODO: Get current user from token
-    # TODO: Fetch all active sessions from database
+    sessions = await list_active_sessions(db, current_user.id)
 
     return {
         "sessions": [
-            # Placeholder
             {
-                "id": "session-1",
-                "device": "Chrome on macOS",
-                "ip_address": "192.168.1.1",
-                "last_active": datetime.now(timezone.utc).isoformat(),
-                "current": True,
+                "id": session.id,
+                "device": session.device_info,
+                "ip_address": session.ip_address,
+                "last_active": session.last_active_at.isoformat(),
+                "created_at": session.created_at.isoformat(),
+                "current": session.id == current_user.session_id,
             }
+            for session in sessions
         ]
     }
 
 
 @router.delete("/sessions/{session_id}")
-async def revoke_session(request: Request, session_id: str):
+async def revoke_session_endpoint(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Revoke a specific session.
+    Revoke a specific session of the current user.
     """
-    # TODO: Get current user from token
-    # TODO: Verify session belongs to user
-    # TODO: Revoke session (add to revocation list)
-    # TODO: Log session revocation
+    if not await revoke_session(db, current_user.id, session_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
 
+    logger.info("session_revoked", user_id=current_user.id, session_id=session_id)
     return {"message": "Session revoked"}
 
 
 @router.delete("/sessions")
-async def revoke_all_sessions(request: Request):
+async def revoke_all_sessions(
+    current_user: CurrentUser = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Revoke all sessions except current.
     """
-    # TODO: Get current user from token
-    # TODO: Revoke all other sessions
-    # TODO: Log bulk session revocation
+    count = await revoke_other_sessions(db, current_user.id, current_user.session_id)
 
-    return {"message": "All other sessions revoked"}
+    logger.info("other_sessions_revoked", user_id=current_user.id, count=count)
+    return {"message": "All other sessions revoked", "revoked_count": count}

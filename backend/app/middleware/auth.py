@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import verify_token
-from app.models.user import User
+from app.models.user import Session, User
+from app.services.session_service import is_session_usable
 
 logger = structlog.get_logger()
 
@@ -34,12 +35,14 @@ class CurrentUser:
         org_id: str,
         role: str = "member",
         is_active: bool = True,
+        session_id: Optional[str] = None,
     ):
         self.id = id
         self.email = email
         self.org_id = org_id
         self.role = role
         self.is_active = is_active
+        self.session_id = session_id
 
 
 async def get_current_user(
@@ -51,6 +54,8 @@ async def get_current_user(
 
     Rolü ve organizasyonu token'daki iddialardan değil veritabanından alır;
     böylece rol değişikliği veya hesabın kapatılması hemen etkili olur.
+    Token'ın bağlı olduğu oturum kapatılmışsa (çıkış, iptal) token süresi dolmasa
+    da geçersizdir.
     """
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -73,12 +78,19 @@ async def get_current_user(
     if user is None or user.deleted_at is not None or not user.is_active:
         raise unauthorized
 
+    if not token_data.session_id:
+        raise unauthorized
+    session = await db.get(Session, token_data.session_id)
+    if not is_session_usable(session, user.id):
+        raise unauthorized
+
     return CurrentUser(
         id=user.id,
         email=user.email,
         org_id=user.org_id,
         role=user.role,
         is_active=user.is_active,
+        session_id=session.id,
     )
 
 

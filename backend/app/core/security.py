@@ -151,6 +151,8 @@ class TokenData(BaseModel):
     role: Optional[str] = None
     token_type: str = "access"
     exp: datetime
+    jti: Optional[str] = None  # refresh token'ın benzersiz kimliği
+    session_id: Optional[str] = None  # access token'ın bağlı olduğu oturum
 
 
 def create_access_token(
@@ -158,6 +160,7 @@ def create_access_token(
     org_id: Optional[str] = None,
     role: Optional[str] = None,
     expires_delta: Optional[timedelta] = None,
+    session_id: Optional[str] = None,
 ) -> str:
     """
     Create a JWT access token.
@@ -167,6 +170,7 @@ def create_access_token(
         org_id: Organization identifier
         role: User role
         expires_delta: Custom expiration time
+        session_id: Session the token belongs to (revoking the session kills the token)
 
     Returns:
         Encoded JWT token
@@ -184,6 +188,8 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
+    if session_id:
+        payload["sid"] = session_id
 
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
@@ -191,6 +197,7 @@ def create_access_token(
 def create_refresh_token(
     user_id: str,
     expires_delta: Optional[timedelta] = None,
+    jti: Optional[str] = None,
 ) -> str:
     """
     Create a JWT refresh token.
@@ -198,6 +205,7 @@ def create_refresh_token(
     Args:
         user_id: User identifier
         expires_delta: Custom expiration time
+        jti: Token ID; generated when omitted (pass it to store it on the session)
 
     Returns:
         Encoded JWT token
@@ -212,7 +220,7 @@ def create_refresh_token(
         "type": "refresh",
         "exp": expire,
         "iat": datetime.now(timezone.utc),
-        "jti": secrets.token_urlsafe(16),  # Unique token ID for revocation
+        "jti": jti or secrets.token_urlsafe(16),  # Unique token ID for revocation
     }
 
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
@@ -246,6 +254,8 @@ def verify_token(token: str, token_type: str = "access") -> Optional[TokenData]:
             role=payload.get("role"),
             token_type=payload["type"],
             exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+            jti=payload.get("jti"),
+            session_id=payload.get("sid"),
         )
 
     except JWTError:
@@ -256,6 +266,8 @@ def create_token_pair(
     user_id: str,
     org_id: Optional[str] = None,
     role: Optional[str] = None,
+    session_id: Optional[str] = None,
+    jti: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Create both access and refresh tokens.
@@ -264,12 +276,14 @@ def create_token_pair(
         user_id: User identifier
         org_id: Organization identifier
         role: User role
+        session_id: Session both tokens belong to
+        jti: Refresh token ID to store on the session
 
     Returns:
         Tuple of (access_token, refresh_token)
     """
-    access_token = create_access_token(user_id, org_id, role)
-    refresh_token = create_refresh_token(user_id)
+    access_token = create_access_token(user_id, org_id, role, session_id=session_id)
+    refresh_token = create_refresh_token(user_id, jti=jti)
     return access_token, refresh_token
 
 

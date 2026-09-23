@@ -241,6 +241,9 @@ class Session(Base):
 
     # Session details
     refresh_token_jti: Mapped[str] = mapped_column(String(100), unique=True)
+    # Yenilemede eski token kısa süre (tolerans) geçerli kalır; çoklu sekme yarışı için
+    previous_refresh_token_jti: Mapped[Optional[str]] = mapped_column(String(100))
+    rotated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     device_info: Mapped[Optional[str]] = mapped_column(String(255))
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
     user_agent: Mapped[Optional[str]] = mapped_column(Text)
@@ -267,6 +270,7 @@ class Session(Base):
     __table_args__ = (
         Index("ix_sessions_user_id", "user_id"),
         Index("ix_sessions_refresh_token_jti", "refresh_token_jti"),
+        Index("ix_sessions_previous_refresh_token_jti", "previous_refresh_token_jti"),
         Index("ix_sessions_expires_at", "expires_at"),
     )
 

@@ -15,6 +15,7 @@ from app.middleware.auth import get_current_user
 PUBLIC = {
     "GET /health", "GET /health/ready", "GET /health/live", "GET /status",
     "POST /api/v1/auth/register", "POST /api/v1/auth/login", "POST /api/v1/auth/refresh",
+    "POST /api/v1/auth/logout",  # refresh token'ı gövdede taşır; access token süresi dolmuş olabilir
     "POST /api/v1/auth/password-reset/request", "POST /api/v1/auth/password-reset/confirm",
     "POST /api/v1/billing/webhook",  # Stripe imzasıyla doğrulanır
     "GET /api/v1/connections/callback/{platform}",  # OAuth dönüşü, state ile doğrulanır
@@ -26,8 +27,6 @@ PUBLIC = {
 
 # Henüz iskelet olan uçlar: ilgili tur yazılınca kimlik şartı eklenmeli
 STUBS_PENDING_AUTH = {
-    "POST /api/v1/auth/logout", "GET /api/v1/auth/sessions", "DELETE /api/v1/auth/sessions",
-    "DELETE /api/v1/auth/sessions/{session_id}",
     "POST /api/v1/auth/mfa/setup", "POST /api/v1/auth/mfa/verify",
     "POST /api/v1/auth/mfa/challenge", "POST /api/v1/auth/mfa/disable",
     "DELETE /api/v1/users/me", "POST /api/v1/users/organizations",
