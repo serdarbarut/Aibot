@@ -162,7 +162,7 @@ class AIUsageQuota(Base):
 
     # Plan tier at time of quota
     plan_tier: Mapped[str] = mapped_column(
-        Enum("free", "pro", "enterprise", name="plan_tier"),
+        Enum("free", "pro", "enterprise", name="ai_quota_plan_tier"),
         default="free",
     )
 

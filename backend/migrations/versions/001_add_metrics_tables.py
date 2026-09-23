@@ -20,7 +20,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '001_metrics'
-down_revision = None
+down_revision = '000_initial_schema'
 branch_labels = None
 depends_on = None
 
@@ -51,7 +51,8 @@ def upgrade() -> None:
         sa.Column('extra_metrics', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('synced_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
+        # Hypertable bölümleme sütunu (timestamp) birincil anahtarın parçası olmalı
+        sa.PrimaryKeyConstraint('id', 'timestamp'),
     )
 
     # Create indexes
