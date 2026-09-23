@@ -261,6 +261,100 @@ async def create_new_alert(
     )
 
 
+# Sabit yollar, aynı seviyedeki dinamik yoldan ({...}) ÖNCE tanımlanmalı;
+# aksi halde "{...}" parametresi olarak yakalanırlar.
+
+@router.get("/history", response_model=AlertHistoryListResponse)
+async def list_alert_history(
+    alert_id: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None, pattern="^(triggered|acknowledged|resolved)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
+):
+    """
+    Get alert history.
+    """
+    org_id = current_user.org_id
+
+    offset = (page - 1) * page_size
+    history, total = await get_alert_history(
+        db=db,
+        org_id=org_id,
+        alert_id=alert_id,
+        status=status,
+        limit=page_size,
+        offset=offset,
+    )
+
+    return AlertHistoryListResponse(
+        history=[
+            AlertHistoryResponse(
+                id=h.id,
+                alert_id=h.alert_id,
+                campaign_id=h.campaign_id,
+                alert_type=h.alert_type,
+                message=h.message,
+                metric_value=float(h.metric_value) if h.metric_value else None,
+                threshold_value=float(h.threshold_value) if h.threshold_value else None,
+                status=h.status,
+                triggered_at=h.triggered_at.isoformat(),
+                acknowledged_by_id=h.acknowledged_by_id,
+                acknowledged_at=h.acknowledged_at.isoformat() if h.acknowledged_at else None,
+                resolution_note=h.resolution_note,
+            )
+            for h in history
+        ],
+        total=total,
+    )
+
+@router.get("/notifications", response_model=NotificationListResponse)
+async def list_notifications(
+    is_read: Optional[bool] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
+):
+    """
+    Get notifications for the current user.
+    """
+    user_id = current_user.id
+
+    offset = (page - 1) * page_size
+    notifications, total = await get_notifications(
+        db=db,
+        user_id=user_id,
+        is_read=is_read,
+        limit=page_size,
+        offset=offset,
+    )
+
+    # Get unread count
+    _, unread_count = await get_notifications(db=db, user_id=user_id, is_read=False, limit=1)
+
+    return NotificationListResponse(
+        notifications=[
+            NotificationResponse(
+                id=n.id,
+                title=n.title,
+                message=n.message,
+                notification_type=n.notification_type,
+                related_entity_type=n.related_entity_type,
+                related_entity_id=n.related_entity_id,
+                data=n.data,
+                is_read=n.is_read,
+                read_at=n.read_at.isoformat() if n.read_at else None,
+                created_at=n.created_at.isoformat(),
+            )
+            for n in notifications
+        ],
+        total=total,
+        unread_count=unread_count,
+    )
+
+
 @router.get("/{alert_id}", response_model=AlertResponse)
 async def get_alert(
     alert_id: str,
@@ -425,52 +519,6 @@ async def check_all_alerts(
 # Alert History Endpoints
 # =============================================================================
 
-@router.get("/history", response_model=AlertHistoryListResponse)
-async def list_alert_history(
-    alert_id: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None, pattern="^(triggered|acknowledged|resolved)$"),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_active_user),
-):
-    """
-    Get alert history.
-    """
-    org_id = current_user.org_id
-
-    offset = (page - 1) * page_size
-    history, total = await get_alert_history(
-        db=db,
-        org_id=org_id,
-        alert_id=alert_id,
-        status=status,
-        limit=page_size,
-        offset=offset,
-    )
-
-    return AlertHistoryListResponse(
-        history=[
-            AlertHistoryResponse(
-                id=h.id,
-                alert_id=h.alert_id,
-                campaign_id=h.campaign_id,
-                alert_type=h.alert_type,
-                message=h.message,
-                metric_value=float(h.metric_value) if h.metric_value else None,
-                threshold_value=float(h.threshold_value) if h.threshold_value else None,
-                status=h.status,
-                triggered_at=h.triggered_at.isoformat(),
-                acknowledged_by_id=h.acknowledged_by_id,
-                acknowledged_at=h.acknowledged_at.isoformat() if h.acknowledged_at else None,
-                resolution_note=h.resolution_note,
-            )
-            for h in history
-        ],
-        total=total,
-    )
-
-
 @router.post("/history/{history_id}/acknowledge", response_model=AlertHistoryResponse)
 async def acknowledge_alert_history(
     history_id: str,
@@ -515,52 +563,6 @@ async def acknowledge_alert_history(
 # =============================================================================
 # Notifications Endpoints
 # =============================================================================
-
-@router.get("/notifications", response_model=NotificationListResponse)
-async def list_notifications(
-    is_read: Optional[bool] = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_active_user),
-):
-    """
-    Get notifications for the current user.
-    """
-    user_id = current_user.id
-
-    offset = (page - 1) * page_size
-    notifications, total = await get_notifications(
-        db=db,
-        user_id=user_id,
-        is_read=is_read,
-        limit=page_size,
-        offset=offset,
-    )
-
-    # Get unread count
-    _, unread_count = await get_notifications(db=db, user_id=user_id, is_read=False, limit=1)
-
-    return NotificationListResponse(
-        notifications=[
-            NotificationResponse(
-                id=n.id,
-                title=n.title,
-                message=n.message,
-                notification_type=n.notification_type,
-                related_entity_type=n.related_entity_type,
-                related_entity_id=n.related_entity_id,
-                data=n.data,
-                is_read=n.is_read,
-                read_at=n.read_at.isoformat() if n.read_at else None,
-                created_at=n.created_at.isoformat(),
-            )
-            for n in notifications
-        ],
-        total=total,
-        unread_count=unread_count,
-    )
-
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationResponse)
 async def mark_notification_as_read(

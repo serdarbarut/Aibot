@@ -76,3 +76,19 @@ def test_no_hardcoded_placeholder_ids_in_app():
         if "00000000-0000-0000-0000-00000000000" in p.read_text()
     ]
     assert not offenders, f"Sabit sahte kimlik bulunan dosyalar: {offenders}"
+
+
+def test_no_route_is_shadowed_by_an_earlier_dynamic_route():
+    """`/alerts/{alert_id}` önce tanımlıysa `/alerts/history` ona yakalanır (UUID hatası, 500)."""
+    import re
+
+    routes = [r for r in app.routes if isinstance(r, APIRoute)]
+    shadowed = []
+    for i, earlier in enumerate(routes):
+        for later in routes[i + 1:]:
+            if not (earlier.methods & later.methods) or earlier.path == later.path:
+                continue
+            sample = re.sub(r"\{[^}]+\}", "x", later.path)
+            if earlier.path_regex.match(sample):
+                shadowed.append(f"{later.path}  <-  {earlier.path}")
+    assert not shadowed, f"Sonra tanımlandığı için erişilemeyen rotalar: {shadowed}"

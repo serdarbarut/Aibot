@@ -412,6 +412,50 @@ async def list_campaigns(
     )
 
 
+# Sabit yollar, aynı seviyedeki dinamik yoldan ({...}) ÖNCE tanımlanmalı;
+# aksi halde "{...}" parametresi olarak yakalanırlar.
+
+@router.get("/pending-approvals", response_model=CampaignListResponse)
+async def list_pending_approvals(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_active_user),
+):
+    """
+    List campaigns pending approval.
+
+    For managers to review and approve/reject campaigns.
+    """
+    # TODO: Verify user has manager or admin role
+    org_id = current_user.org_id
+
+    query = select(Campaign).where(
+        Campaign.org_id == org_id,
+        Campaign.status == "pending_review",
+    )
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    # Paginate
+    query = query.order_by(Campaign.updated_at.asc())  # Oldest first
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    result = await db.execute(query)
+    campaigns = result.scalars().all()
+
+    return CampaignListResponse(
+        campaigns=[CampaignResponse.model_validate(c) for c in campaigns],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
     request: Request,
@@ -1137,47 +1181,6 @@ async def duplicate_campaign(
 # =============================================================================
 # Approval Queue Endpoints
 # =============================================================================
-
-@router.get("/pending-approvals", response_model=CampaignListResponse)
-async def list_pending_approvals(
-    request: Request,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_active_user),
-):
-    """
-    List campaigns pending approval.
-
-    For managers to review and approve/reject campaigns.
-    """
-    # TODO: Verify user has manager or admin role
-    org_id = current_user.org_id
-
-    query = select(Campaign).where(
-        Campaign.org_id == org_id,
-        Campaign.status == "pending_review",
-    )
-
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-
-    # Paginate
-    query = query.order_by(Campaign.updated_at.asc())  # Oldest first
-    query = query.offset((page - 1) * page_size).limit(page_size)
-
-    result = await db.execute(query)
-    campaigns = result.scalars().all()
-
-    return CampaignListResponse(
-        campaigns=[CampaignResponse.model_validate(c) for c in campaigns],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
-
 
 # =============================================================================
 # Platform Sync Endpoints
