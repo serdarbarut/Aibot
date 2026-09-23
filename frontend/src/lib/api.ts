@@ -62,7 +62,7 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
 // Aynı anda birden fazla 401 gelirse tek bir yenileme isteği yapılır.
 let refreshPromise: Promise<boolean> | null = null
 
-async function refreshAccessToken(): Promise<boolean> {
+async function refreshAccessToken(retryWithLatestToken = true): Promise<boolean> {
   const { refreshToken, setTokens } = useAuthStore.getState()
   if (!refreshToken) return false
 
@@ -72,7 +72,15 @@ async function refreshAccessToken(): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
     })
-    if (!response.ok) return false
+    if (!response.ok) {
+      // Başka bir sekme bu sırada yenilediyse (localStorage ile eşitlendi) onun
+      // token'ıyla bir kez daha dene; yoksa kullanıcı gereksiz yere çıkış yapar.
+      const latest = useAuthStore.getState().refreshToken
+      if (retryWithLatestToken && latest && latest !== refreshToken) {
+        return refreshAccessToken(false)
+      }
+      return false
+    }
     const data = (await response.json()) as LoginResponse
     setTokens(data.access_token, data.refresh_token)
     return true
@@ -743,7 +751,13 @@ export const authApi = {
       auth: false,
     }),
 
-  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  /** Sunucudaki oturumu kapatır; access token süresi dolmuş olabileceğinden yalnızca refresh token gönderilir. */
+  logout: (refreshToken: string) =>
+    request<void>('/auth/logout', {
+      method: 'POST',
+      body: { refresh_token: refreshToken },
+      auth: false,
+    }),
 }
 
 export const userApi = {

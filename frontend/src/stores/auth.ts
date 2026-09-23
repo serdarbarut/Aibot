@@ -70,3 +70,13 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
+
+// Başka bir sekme token yeniler veya çıkış yaparsa bu sekmenin durumunu eşitle;
+// aksi halde eski refresh token'la yenileme denenir ve kullanıcı çıkış yapmış olur.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'auth-storage') {
+      void useAuthStore.persist.rehydrate()
+    }
+  })
+}

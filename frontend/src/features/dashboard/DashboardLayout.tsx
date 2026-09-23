@@ -16,6 +16,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -30,11 +31,19 @@ const navigation = [
 export default function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, refreshToken } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Sunucudaki oturumu kapat; ağ hatası yerel çıkışı engellemesin
+    if (refreshToken) {
+      try {
+        await authApi.logout(refreshToken)
+      } catch {
+        // Yerel çıkış yine yapılır
+      }
+    }
     logout()
     navigate('/login')
   }
