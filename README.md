@@ -117,6 +117,24 @@ npm install
 npm run dev
 ```
 
+### Running Tests
+
+Tests run offline (no network, no database). With Docker:
+
+```bash
+docker build --target development -t aibot-backend-dev backend
+docker run --rm -e ENVIRONMENT=development aibot-backend-dev python -m pytest -q
+```
+
+Or in a local virtualenv:
+
+```bash
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements-dev.txt
+ENVIRONMENT=development python -m pytest -q
+```
+
 ## Configuration
 
 ### Required Environment Variables
