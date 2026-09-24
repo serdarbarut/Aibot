@@ -13,7 +13,7 @@
 - [ ] Review rate limiting settings for production traffic
 
 ### Database
-- [ ] Run Alembic migrations: `alembic upgrade head`
+- [ ] Migrations run automatically on `docker-compose up` (the `migrate` service); check its log: `docker-compose logs migrate`
 - [ ] Verify TimescaleDB extension is enabled
 - [ ] Create database backups schedule
 - [ ] Configure connection pool sizes for expected load
@@ -47,8 +47,9 @@ curl https://yourdomain.com/health/ready
 # View logs
 docker-compose logs -f api
 
-# Run database migrations
-docker-compose exec api alembic upgrade head
+# Database migrations run automatically before api/worker start (the `migrate` service).
+# To run them manually:
+docker-compose run --rm migrate
 
 # Scale workers
 docker-compose up -d --scale worker=3

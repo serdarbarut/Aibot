@@ -19,6 +19,28 @@ services:
     networks:
       - aimarketing
 
+  # Veritabanı migrasyonu: api ve worker açılmadan önce bir kez çalışır ve çıkar.
+  # Ayrı bir servis olduğu için api'nin 4 işçisi aynı anda migrasyon koşmaz.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aimarketing-migrate
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-aimarketing}:${POSTGRES_PASSWORD:-aimarketing_dev}@postgres:5432/${POSTGRES_DB:-aimarketing}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-openssl-rand-hex-32}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-in-production-use-fernet-key}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    volumes:
+      - ./backend:/app:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aimarketing
+
   # FastAPI Application
   api:
     build:
@@ -56,6 +78,8 @@ services:
     volumes:
       - ./backend:/app:ro
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -92,6 +116,8 @@ services:
     volumes:
       - ./backend:/app:ro
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
