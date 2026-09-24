@@ -146,6 +146,10 @@ class WorkerSettings:
     max_tries = 3  # Retry failed jobs up to 3 times
     retry_delay = 60  # Wait 60 seconds before retry
 
+    # Sağlık anahtarı Redis'e bu aralıkla yazılır (varsayılan 3600 sn: ölü worker'ı
+    # bir saat boyunca fark ettirmez). docker-compose healthcheck'i `arq --check` ile okur.
+    health_check_interval = 30
+
 
 # Set redis_settings as class attribute (ARQ expects this)
 WorkerSettings.redis_settings = WorkerSettings._get_redis_settings()

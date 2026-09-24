@@ -124,6 +124,14 @@ services:
         condition: service_healthy
     networks:
       - aimarketing
+    # Worker HTTP dinlemez; Dockerfile'daki curl :8000 healthcheck'i burada hep başarısız olur.
+    # arq'ın kendi sağlık kontrolü Redis'teki sağlık anahtarını okur.
+    healthcheck:
+      test: ["CMD", "arq", "--check", "app.workers.settings.WorkerSettings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
