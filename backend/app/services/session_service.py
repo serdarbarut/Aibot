@@ -13,7 +13,7 @@ from typing import Optional
 from uuid import uuid4
 
 import structlog
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -24,6 +24,9 @@ logger = structlog.get_logger()
 
 # Yenilemeden sonra bir önceki refresh token'ın hâlâ kabul edildiği süre
 REFRESH_GRACE_SECONDS = 30
+
+# Süresi dolmuş veya iptal edilmiş oturumların silinmeden önce saklandığı süre
+STALE_SESSION_RETENTION_DAYS = 30
 
 
 class InvalidRefreshTokenError(Exception):
@@ -220,3 +223,25 @@ async def revoke_other_sessions(db: AsyncSession, user_id: str, keep_session_id:
             count += 1
     await db.flush()
     return count
+
+
+async def delete_stale_sessions(
+    db: AsyncSession,
+    retention_days: int = STALE_SESSION_RETENTION_DAYS,
+) -> int:
+    """
+    Süresi dolalı veya iptal edileli `retention_days` günden fazla olan oturumları siler.
+
+    Kullanılabilir (aktif) oturumlara dokunmaz. Silinen satır sayısını döndürür.
+    """
+    cutoff = _now() - timedelta(days=retention_days)
+    result = await db.execute(
+        delete(Session).where(
+            or_(
+                Session.expires_at < cutoff,
+                Session.revoked_at < cutoff,
+            )
+        )
+    )
+    return result.rowcount or 0
+

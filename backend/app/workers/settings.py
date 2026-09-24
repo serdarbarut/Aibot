@@ -19,6 +19,7 @@ from app.workers.campaign_sync import (
     sync_campaign_statuses,
 )
 from app.workers.metrics_sync import sync_all_metrics
+from app.workers.session_cleanup import cleanup_stale_sessions
 from app.workers.alerts_worker import check_all_alerts
 from app.workers.automation_worker import evaluate_automation_rules
 
@@ -92,6 +93,7 @@ class WorkerSettings:
         send_notification,
         generate_report,
         cleanup_dead_letters,
+        cleanup_stale_sessions,
         send_daily_summaries,
         sync_approved_campaigns,
         sync_campaign_statuses,
@@ -122,6 +124,9 @@ class WorkerSettings:
 
         # Dead letter cleanup at 2 AM UTC
         cron(cleanup_dead_letters, hour=2, minute=0),
+
+        # Expired/revoked session cleanup at 3 AM UTC
+        cron(cleanup_stale_sessions, hour=3, minute=0),
     ]
 
     # Redis connection settings
