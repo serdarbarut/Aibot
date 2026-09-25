@@ -3,7 +3,7 @@
 Bu dosya oturumlar arası devir içindir. Yeni bir oturum önce bunu okur.
 Doğruluk sırası: **kod (`dosya:satır`)** → bu kart → geri kalan her şey (eski ADR'ler, `.planning/`, issue'lar) yalnızca geçmiştir, kaynak gösterilmez.
 
-Son güncelleme: 2026-09-24. Test: 92 geçiyor.
+Son güncelleme: 2026-09-25. Test: 92 geçiyor.
 
 ---
 
@@ -14,7 +14,7 @@ Son güncelleme: 2026-09-24. Test: 92 geçiyor.
 | `origin` | `DSMPromo/Aibot` | Orijinal repo. **Buraya push edilmez.** |
 | `fork` | `serdarbarut/Aibot` | Serdar'ın fork'u. `git push fork master` |
 
-Push durumu: `b2de5b5` ve bu kartın commit'i henüz `fork`'a gönderilmedi.
+Push durumu: `e9b5510`'a kadar her şey `fork`'a gönderildi (2026-09-25).
 
 ## Nasıl çalıştırılır
 
@@ -69,6 +69,7 @@ Ne çalışıyor, kanıtıyla.
 **Altyapı**
 - `migrate` servisi `alembic upgrade head` çalıştırır; `api` ve `worker` bunu beklemez → `docker-compose.yml:24` (`service_completed_successfully`).
 - Migrasyon zinciri: `000_initial_schema` → `001_metrics` → `002_add_report_schedules` → `003_add_automation_tables` → `004_session_rotation`. Boş veritabanında sıfırdan, geri alma ve tekrar yükseltme denendi.
+- Clean-install denendi (2026-09-25): `docker compose down -v` (7 hacim silindi) → `up -d --build`; `migrate` `000`→`004` sırayla çalıştı, çıkış kodu 0, `alembic_version = 004_session_rotation`, `public`'te 32 tablo, 1 hypertable; `api`/`worker`/`postgres`/`redis` sağlıklı, arayüz ve `/api/docs` 200.
 - Worker sağlık kontrolü `arq --check` → `docker-compose.yml:130`; aralık `backend/app/workers/settings.py:156`.
 
 **Kimlik doğrulama** (Tur 1–3)
@@ -88,7 +89,8 @@ Ne çalışıyor, kanıtıyla.
 
 **Frontend**
 - `frontend/src/lib/api.ts`: HTTP istemcisi, 401'de tek seferlik token yenileme, sekmeler arası eşitleme (`stores/auth.ts`).
-- `tsc` 0 hata, `npm run build` başarılı. Tarayıcıda uçtan uca **elle denenmedi**.
+- `tsc` 0 hata, `npm run build` başarılı.
+- Tarayıcıda uçtan uca denendi (2026-09-25): giriş, sayfa yenileme, bozuk access token → 4×401 + tek `/auth/refresh` + 4 yeniden deneme 200, iki sekme aynı anda yenileme (ikisi de 200, ikisi de giriş yapmış kaldı, aynı token'a eşitlendi), çıkış (`POST /auth/logout` 200, iki sekme `/login`'e düştü, `sessions` satırı `revoked`).
 
 **Testler** (`backend/tests/`, 92 test): kimlik servisi, `get_current_user`, oturum servisi, oturum temizliği, kampanya sahipliği, Slack URL, rota güvenliği (kimliksiz açık uçların listesini kilitler).
 
@@ -102,8 +104,7 @@ Ne çalışıyor, kanıtıyla.
 2. **18 iskelet uç kimliksiz ve sahte veri dönüyor** — organizasyon davetleri, üyeler, rol değiştirme, hesap silme (`DELETE /users/me`), MFA kurulum uçları. Tam liste: `backend/tests/test_route_security.py:29` (`STUBS_PENDING_AUTH`). Gerçekleyince listeden çıkarılır (test "bayat kayıt" olarak yakalar).
 3. **`plan_tier` enum'u (ŞEMA, onay gerekir).** `ai_usage_quotas.plan_tier` yalnızca `free/pro/enterprise` kabul eder (`models/ai_generation.py:165`); organizasyon planı `starter/agency` olabilir. Şimdilik sabit `"free"` → `api/v1/ai.py:132`. Seçenek: enum'u 5 değere genişletmek (migrasyon).
 4. **001–003 eski migrasyonları ile modeller arasında fark (ŞEMA, onay gerekir).** `alembic check`: 58 `server_default` ve 20 `nullable` farkı, yalnızca 001–003'ün kurduğu 10 tabloda (modeller `NOT NULL`/varsayılansız, migrasyonlar varsayılanlı ve null'a izinli). Yeni 19 tabloda fark yok.
-5. **Clean-install denenmedi.** `docker compose down -v` ile hacimler silinip baştan kurulum yapılmadı (yerel veritabanı silineceği için). `init-db.sql` düzeltmesi ve `migrate` servisi ayrı ayrı doğrulandı, boş hacimde birlikte görülmedi.
-6. **Frontend'i tarayıcıda uçtan uca deneme** (giriş, çıkış, iki sekme) — yalnızca derleme ve API testiyle doğrulandı.
+5. **İki sekme yarışında eski refresh token'ın `localStorage`'da kalma riski** (ölçülmedi). Yarışta sunucu iki farklı geçerli token üretiyor; `sessions` yalnızca bir "önceki" token tutuyor (`session_service.py:144-145`). `localStorage`'a eski olan en son yazılırsa, sonraki yenilemede (~15 dk) reddedilir ve istemcinin yedek denemesi çalışmaz (`api.ts:79`, `latest === refreshToken`) → kullanıcı çıkış yapar. Gerçek arayüzde tetiklenemedi; iki sekme aynı token'a indi ama bunun sunucudaki güncel token olduğu doğrulanamadı.
 
 Kod içinde `TODO` sayısı: `backend/app/api` altında 78 (Tur 3 öncesi 201). Ölçüm: `grep -rn TODO backend/app/api | wc -l`.
 
