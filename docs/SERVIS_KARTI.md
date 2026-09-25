@@ -1,5 +1,7 @@
 # Servis Kartı — AI Marketing Platform (Aibot)
 
+**Proje durduruldu (2026-09-25, Serdar'ın kararı).** Bu projede geliştirmeye devam edilmeyecek; aşağıdaki açık işler yapılmadan kalır.
+
 Bu dosya oturumlar arası devir içindir. Yeni bir oturum önce bunu okur.
 Doğruluk sırası: **kod (`dosya:satır`)** → bu kart → geri kalan her şey (eski ADR'ler, `.planning/`, issue'lar) yalnızca geçmiştir, kaynak gösterilmez.
 
